@@ -10,12 +10,12 @@
 
 ## 🎬 라이브 데모 (Live Demo)
 
-> **👉 https://voxel-sandbox.vercel.app/** — 브라우저에서 바로 실행 (60fps, WebGL)
+> **👉 [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/)** — 브라우저에서 바로 실행 (60fps, WebGL)
 
 | | |
 |---|---|
 | ![Demo](https://img.shields.io/badge/Live-Demo-7C3AED?style=for-the-badge&logo=vercel&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fvoxel--sandbox-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/voxel-sandbox) |
-| ![Status](https://img.shields.io/badge/Status-In%20Development-F59E0B?style=flat-square) | ![Stack](https://img.shields.io/badge/Stack-Three.js%20%2B%20InstancedMesh-000000?style=flat-square&logo=three.js&logoColor=white) |
+| ![Status](https://img.shields.io/badge/Status-Live-22C55E?style=flat-square) | ![Stack](https://img.shields.io/badge/Stack-Three.js%20%2B%20InstancedMesh-000000?style=flat-square&logo=three.js&logoColor=white) |
 | ![License](https://img.shields.io/badge/License-MIT-F1C40F?style=flat-square) | ![Deps](https://img.shields.io/badge/Dependencies-0-9CA3AF?style=flat-square) |
 
 ### 🎮 빠른 사용법
@@ -30,13 +30,14 @@
 
 ## 🤖 생성 정보 (Attribution)
 
-이 프로젝트의 코드는 아래 모델과 프롬프트를 이용해 **자동으로 생성**됩니다.
+이 프로젝트의 코드는 아래 모델과 프롬프트를 이용해 **자동으로 생성**되었습니다.
 
 | 항목 | 값 |
 |---|---|
 | **모델** | MiniMax-M3 |
 | **실행 환경** | OpenCode CLI |
 | **저장소** | [`sigco3111/voxel-sandbox`](https://github.com/sigco3111/voxel-sandbox) |
+| **라이브** | [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/) |
 | **라이선스** | MIT |
 | **의존성** | 없음 (Three.js CDN, 단일 HTML) |
 
@@ -197,14 +198,17 @@ canvas.addEventListener('mousedown', (e) => {
 
 ## 🚀 실행 방법 (Quick Start)
 
-### 방법 1: 그냥 브라우저로 열기
+### 방법 1: 라이브 데모 (가장 간단)
+위 [🎬 라이브 데모](https://voxel-sandbox-five.vercel.app/) 링크 클릭 → 즉시 실행
+
+### 방법 2: 그냥 브라우저로 열기
 ```bash
 open index.html        # macOS
 xdg-open index.html    # Linux
 start index.html       # Windows
 ```
 
-### 방법 2: 로컬 서버 (권장)
+### 방법 3: 로컬 서버 (권장)
 ```bash
 python3 -m http.server 8000
 # → http://localhost:8000
@@ -310,19 +314,6 @@ const CONFIG = {
 
 ---
 
-## 🗺️ 로드맵 (Roadmap)
-
-- [x] **v0.0** — 저장소 + README 스캐폴딩
-- [ ] **v0.1** — 단일 HTML MVP: Three.js + Perlin 지형 + 정적 카메라
-- [ ] **v0.2** — InstancedMesh 블록 렌더링 + 1인칭 컨트롤
-- [ ] **v0.3** — Raycaster 좌클릭 파괴 / 우클릭 설치
-- [ ] **v0.4** — Vercel 배포 + 라이브 데모
-- [ ] **v0.5** — 블록 타입 다양화 (잔디/흙/돌/모래)
-- [ ] **v0.6** — 물 (반투명) + 호수 표현
-- [ ] **v1.0** — 청크 시스템 (대형 월드) + 저장/로드
-
----
-
 ## 📚 관련 기술 (Related Techniques)
 
 | 기술 | 용도 | 복잡도 |
@@ -354,7 +345,7 @@ MIT © 2026 sigco3111
 
 ## 🙏 Acknowledgments
 
-이 프로젝트는 **MiniMax-M3** 모델과 OpenCode CLI 환경에서 생성됩니다. 프롬프트 엔지니어링과 디자인 결정은 저장소 소유자가 직접 수행했습니다.
+이 프로젝트는 **MiniMax-M3** 모델과 OpenCode CLI 환경에서 생성되었습니다. 프롬프트 엔지니어링과 디자인 결정은 저장소 소유자가 직접 수행했습니다.
 
 - **Minecraft (2011)**: Mojang Studios — *"복셀 샌드박스의 교과서"*
 - **Perlin Noise (1983)**: Ken Perlin — *"Improving Noise"*, SIGGRAPH*
