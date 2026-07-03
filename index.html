@@ -1,26 +1,1290 @@
-<!--
-  🚧 Under construction — OpenCode (MiniMax-M3) 가 다음 프롬프트로 작업할 예정:
-
-  "마인크래프트처럼 블록(Voxel)으로 이루어진 3D 세상을 브라우저에 구현하는데,
-   펄린 노이즈(Perlin Noise)를 사용하여 산과 호수가 있는 지형을 자동으로 생성하고,
-   마우스 왼쪽 클릭으로 블록을 파괴하고 오른쪽 클릭으로 새로운 블록을 설치할 수
-   있는 간단한 샌드박스 게임을 만들어줘.
-   Implementation Advice: Use Three.js. To optimize, don't just render individual
-   boxes; use InstancedMesh or merge geometries. Use Raycaster to detect which
-   face of a voxel is clicked for adding/removing blocks. 모든 의존관계의 코드를
-   하나의 HTML에 담는 형태로 코드 작성."
-
-  자세한 내용은 README.md 참조.
--->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>voxel-sandbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voxel Sandbox · Three.js + Perlin Noise</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --hud-bg: rgba(12, 16, 32, 0.72);
+    --hud-border: rgba(255, 255, 255, 0.08);
+    --hud-fg: #e8ecf6;
+    --hud-dim: #98a0b3;
+    --accent: #7cd6ff;
+    --accent-warm: #ffb86b;
+    --danger: #ff6b8a;
+    --good: #7cffa6;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+            "Segoe UI", system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body { font-family: var(--font); color: var(--hud-fg); user-select: none; -webkit-user-select: none; }
+
+  #scene {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block; cursor: crosshair;
+    background: #87ceeb;
+  }
+
+  /* ---------- Start screen overlay ---------- */
+  #start-screen {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(20, 28, 56, 0.55), rgba(8, 12, 24, 0.92));
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    transition: opacity 0.4s ease;
+  }
+  #start-screen.hidden { opacity: 0; pointer-events: none; }
+  #start-card {
+    width: min(520px, 92vw);
+    padding: 32px 36px 28px;
+    background: var(--hud-bg);
+    border: 1px solid var(--hud-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    text-align: left;
+  }
+  #start-card h1 {
+    margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em;
+    background: linear-gradient(90deg, var(--accent), var(--accent-warm));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #start-card .sub {
+    margin: 0 0 18px; font-size: 13px; color: var(--hud-dim); letter-spacing: 0.02em;
+  }
+  #start-card .controls {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 14px;
+    font-size: 13px; margin: 0 0 22px;
+  }
+  #start-card .controls kbd {
+    font-family: var(--mono); font-size: 11px;
+    padding: 2px 7px; border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--hud-border);
+    color: var(--hud-fg);
+  }
+  #start-card .controls span { color: var(--hud-dim); }
+  #start-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; border-radius: 10px; border: 0; cursor: pointer;
+    font: 600 14px/1 var(--font); color: #0a1020;
+    background: linear-gradient(135deg, var(--accent), var(--accent-warm));
+    box-shadow: 0 6px 18px rgba(124, 214, 255, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  #start-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(124, 214, 255, 0.45); }
+  #start-btn:active { transform: translateY(0); }
+  #start-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: #0a1020; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    transition: opacity 0.3s ease;
+  }
+  #hud.hidden { opacity: 0; }
+
+  /* Crosshair */
+  #crosshair {
+    position: absolute; left: 50%; top: 50%;
+    width: 28px; height: 28px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: transform 0.05s ease;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.75);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 3px; height: 100%; transform: translateX(-50%); }
+  #crosshair::after  { top: 50%; left: 0; height: 3px; width: 100%; transform: translateY(-50%); }
+  #crosshair .dot {
+    position: absolute; left: 50%; top: 50%;
+    width: 4px; height: 4px;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.75);
+  }
+  #crosshair.hit::before, #crosshair.hit::after,
+  #crosshair.hit .dot { background: var(--accent-warm); }
+
+  /* Click flash — brief overlay tint when a block breaks/places */
+  #flash {
+    position: absolute; inset: 0;
+    background: rgba(255, 255, 255, 0.0);
+    pointer-events: none;
+    transition: background 0.05s ease-out;
+  }
+  #flash.show-remove { background: rgba(255, 80, 80, 0.18); }
+  #flash.show-place  { background: rgba(124, 214, 255, 0.18); }
+
+  /* Stats (top-left) */
+  #stats {
+    position: absolute; top: 14px; left: 14px;
+    padding: 10px 14px; border-radius: 10px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font: 11px/1.5 var(--mono); color: var(--hud-dim);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  #stats .row { display: flex; gap: 10px; }
+  #stats .k { color: var(--hud-dim); }
+  #stats .v { color: var(--hud-fg); min-width: 60px; }
+
+  /* Mode badge (top-right) */
+  #mode {
+    position: absolute; top: 14px; right: 14px;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font: 600 11px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  #mode.fly { color: var(--accent-warm); }
+  #mode.walk { color: var(--accent); }
+
+  /* Hotbar (bottom center) */
+  #hotbar {
+    position: absolute; left: 50%; bottom: 22px;
+    transform: translateX(-50%);
+    display: flex; gap: 6px; padding: 6px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    border-radius: 12px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: var(--shadow);
+  }
+  .slot {
+    position: relative;
+    width: 52px; height: 52px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--hud-border);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .slot:hover { background: rgba(255, 255, 255, 0.08); }
+  .slot.active {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(124, 214, 255, 0.25);
+  }
+  .slot .swatch {
+    width: 28px; height: 28px; border-radius: 4px;
+    box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .slot .key {
+    position: absolute; top: 2px; left: 6px;
+    font: 700 10px/1 var(--mono); color: var(--hud-dim);
+  }
+  .slot .name {
+    position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+    font: 600 9px/1 var(--font); color: var(--hud-dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    white-space: nowrap;
+    opacity: 0; transition: opacity 0.15s ease;
+  }
+  .slot.active .name { opacity: 1; color: var(--accent); }
+
+  /* Help toggle (bottom-right) */
+  #help {
+    position: absolute; right: 14px; bottom: 14px;
+    padding: 10px 14px; border-radius: 10px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font: 11px/1.6 var(--mono); color: var(--hud-dim);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    max-width: 260px;
+  }
+  #help h4 { margin: 0 0 6px; font: 700 10px/1 var(--font); color: var(--hud-fg); letter-spacing: 0.1em; text-transform: uppercase; }
+  #help .row { display: flex; gap: 8px; }
+  #help kbd {
+    font: 600 10px/1 var(--mono); padding: 2px 6px; border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06); border: 1px solid var(--hud-border);
+    color: var(--hud-fg);
+  }
+  #help.hidden { display: none; }
+
+  /* Toast (transient messages) */
+  #toast {
+    position: absolute; left: 50%; top: 80px;
+    transform: translateX(-50%) translateY(-8px);
+    padding: 8px 16px; border-radius: 999px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font: 600 12px/1 var(--font); color: var(--hud-fg);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Pause overlay (when pointer lock released) */
+  #pause {
+    position: fixed; inset: 0; z-index: 15;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8, 12, 24, 0.55);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    cursor: pointer; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #pause.show { opacity: 1; pointer-events: auto; }
+  #pause .box {
+    padding: 18px 26px; border-radius: 12px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    font: 600 14px/1 var(--font); color: var(--hud-fg);
+  }
+  #pause .box .small { display: block; margin-top: 4px; font: 400 11px/1.4 var(--font); color: var(--hud-dim); }
+</style>
 </head>
 <body>
-<p style="font-family:system-ui;text-align:center;margin-top:20vh">
-  🚧 Under construction. <a href="./README.md">README.md</a> 참조.
-</p>
+
+<canvas id="scene"></canvas>
+
+<!-- Crosshair (visible during play) -->
+<div id="hud" class="hidden">
+  <div id="crosshair"><div class="dot"></div></div>
+  <div id="flash"></div>
+  <div id="stats">
+    <div class="row"><span class="k">x</span><span class="v" id="stat-x">0</span></div>
+    <div class="row"><span class="k">y</span><span class="v" id="stat-y">0</span></div>
+    <div class="row"><span class="k">z</span><span class="v" id="stat-z">0</span></div>
+    <div class="row"><span class="k">fps</span><span class="v" id="stat-fps">60</span></div>
+    <div class="row"><span class="k">blks</span><span class="v" id="stat-blocks">0</span></div>
+  </div>
+  <div id="mode" class="walk">WALK</div>
+  <div id="hotbar"></div>
+  <div id="help">
+    <h4>Controls</h4>
+    <div class="row"><kbd>WASD</kbd> <span>move</span></div>
+    <div class="row"><kbd>Mouse</kbd> <span>aim / look</span></div>
+    <div class="row"><kbd>MMB drag</kbd> <span>look around</span></div>
+    <div class="row"><kbd>Space</kbd> <span>up / jump</span></div>
+    <div class="row"><kbd>Shift</kbd> <span>down / descend</span></div>
+    <div class="row"><kbd>F</kbd> <span>fly / walk</span></div>
+    <div class="row"><kbd>L-MB</kbd> <span>mine</span></div>
+    <div class="row"><kbd>R-MB</kbd> <span>place</span></div>
+    <div class="row"><kbd>1-5</kbd> <span>block</span></div>
+    <div class="row"><kbd>R</kbd> <span>respawn</span></div>
+    <div class="row"><kbd>Esc</kbd> <span>release mouse</span></div>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<!-- Start screen -->
+<div id="start-screen">
+  <div id="start-card">
+    <h1>Voxel Sandbox</h1>
+    <p class="sub">Three.js · Perlin Noise · InstancedMesh · Raycaster</p>
+    <div class="controls">
+      <kbd>WASD</kbd> <span>first-person movement</span>
+      <kbd>Mouse</kbd> <span>aim + look — cursor follows the crosshair, or click to capture pointer</span>
+      <kbd>MMB drag</kbd> <span>look around without pointer lock</span>
+      <kbd>Space / Shift</kbd> <span>ascend / descend (in fly mode)</span>
+      <kbd>F</kbd> <span>toggle fly / walk</span>
+      <kbd>L-MB</kbd> <span>destroy block at the crosshair</span>
+      <kbd>R-MB</kbd> <span>place block on the clicked face</span>
+      <kbd>1 — 5</kbd> <span>select block type (or click a slot)</span>
+      <kbd>R</kbd> <span>respawn at world center</span>
+      <kbd>Esc</kbd> <span>release mouse</span>
+    </div>
+    <button id="start-btn"><span class="dot"></span>Click to start</button>
+  </div>
+</div>
+
+<!-- Pause overlay (click anywhere to resume) -->
+<div id="pause"><div class="box">Paused · click to resume<div class="small">or press <kbd>Esc</kbd> to leave pointer lock</div></div></div>
+
+<!-- =================================================================== -->
+<!--  Three.js + Perlin Noise + InstancedMesh Voxel Sandbox              -->
+<!--  Single-file build, zero external deps beyond three.js CDN.          -->
+<!-- =================================================================== -->
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script>
+'use strict';
+
+/* ===========================================================
+ *  CONFIG
+ * =========================================================== */
+const CONFIG = {
+  WORLD_SIZE:     48,    // cells per side (x & z)
+  MAX_HEIGHT:     24,    // max terrain height
+  BASE_HEIGHT:    11,    // mean terrain height
+  NOISE_SCALE:    0.045, // smaller = larger features
+  NOISE_OCTAVES:  4,
+  NOISE_PERSIST:  0.5,   // amplitude falloff per octave
+  WATER_LEVEL:    8,     // y where lake surface sits
+  SEED:           1337,
+  // Player
+  PLAYER_HEIGHT:  1.7,   // eye height
+  PLAYER_RADIUS:  0.3,
+  WALK_SPEED:     4.5,   // blocks / sec
+  FLY_SPEED:      8.5,
+  JUMP_VELOCITY:  8.5,
+  GRAVITY:        -22,
+  MOUSE_SENS:     0.0022,
+  MAX_REACH:      6,     // max block interaction distance
+  // Render
+  FOG_NEAR:       50,
+  FOG_FAR:        140,
+  MAX_BLOCKS:     60000,
+};
+
+/* ===========================================================
+ *  Seeded PRNG (Mulberry32) + Perlin Noise (Ken Perlin 2002)
+ * =========================================================== */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class PerlinNoise {
+  constructor(seed = 0) {
+    const rand = mulberry32(seed || 1);
+    const p = new Uint8Array(512);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    // Fisher–Yates shuffle
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    for (let i = 0; i < 256; i++) p[256 + i] = p[i];
+    this.perm = p;
+  }
+  // 3D Perlin (Ken Perlin "Improving Noise" 2002)
+  noise(x, y, z) {
+    const p = this.perm;
+    const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+    const lerp = (a, b, t) => a + t * (b - a);
+    const grad = (h, x, y, z) => {
+      const g = h & 15;
+      const u = g < 8 ? x : y;
+      const v = g < 4 ? y : (g === 12 || g === 14 ? x : z);
+      return ((g & 1) ? -u : u) + ((g & 2) ? -v : v);
+    };
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    const Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A  = p[X] + Y,     AA = p[A] + Z,     AB = p[A + 1] + Z;
+    const B  = p[X + 1] + Y, BA = p[B] + Z,     BB = p[B + 1] + Z;
+    return lerp(
+      lerp(
+        lerp(grad(p[AA    ], x,     y,     z    ), grad(p[BA    ], x - 1, y,     z    ), u),
+        lerp(grad(p[AB    ], x,     y - 1, z    ), grad(p[BB    ], x - 1, y - 1, z    ), u),
+        v
+      ),
+      lerp(
+        lerp(grad(p[AA + 1], x,     y,     z - 1), grad(p[BA + 1], x - 1, y,     z - 1), u),
+        lerp(grad(p[AB + 1], x,     y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1), u),
+        v
+      ),
+      w
+    );
+  }
+  // fBm — fractal Brownian motion
+  fbm(x, y, z, octaves = 4, persistence = 0.5) {
+    let amp = 1, freq = 1, sum = 0, norm = 0;
+    for (let i = 0; i < octaves; i++) {
+      sum  += amp * this.noise(x * freq, y * freq, z * freq);
+      norm += amp;
+      amp  *= persistence;
+      freq *= 2;
+    }
+    return sum / norm; // ~ [-1, 1]
+  }
+}
+
+/* ===========================================================
+ *  Block types
+ *  - 0 (AIR) is implicit (no block = no entry in world map)
+ *  - All other types get their own InstancedMesh
+ * =========================================================== */
+const BLOCK = Object.freeze({
+  AIR:   0,
+  GRASS: 1,
+  DIRT:  2,
+  STONE: 3,
+  SAND:  4,
+  WATER: 5,
+});
+
+const BLOCK_DEFS = {
+  [BLOCK.GRASS]: { name: 'Grass', color: 0x6FA84B, opaque: true  },
+  [BLOCK.DIRT]:  { name: 'Dirt',  color: 0x8B5A2B, opaque: true  },
+  [BLOCK.STONE]: { name: 'Stone', color: 0x9097A1, opaque: true  },
+  [BLOCK.SAND]:  { name: 'Sand',  color: 0xE5D08F, opaque: true  },
+  [BLOCK.WATER]: { name: 'Water', color: 0x3A78D8, opaque: false },
+};
+const PLACEABLE = [BLOCK.GRASS, BLOCK.DIRT, BLOCK.STONE, BLOCK.SAND, BLOCK.WATER];
+
+/* ===========================================================
+ *  World — Map<key, type> storage + per-type InstancedMesh
+ *  with swap-and-pop removal for stable runtime cost.
+ * =========================================================== */
+class VoxelWorld {
+  constructor(scene, sharedGeometry) {
+    this.scene    = scene;
+    this.geometry = sharedGeometry;
+    this.blocks   = new Map(); // "x,y,z" -> type id
+    this.halfWorld = CONFIG.WORLD_SIZE / 2;
+    this.halfWorldFloor = Math.floor(this.halfWorld);
+
+    // Per-type bookkeeping
+    this.meshes = {};   // type -> InstancedMesh
+    this.counts = {};   // type -> current instance count
+    this.k2i    = {};   // type -> Map<key, instanceId>
+    this.i2k    = {};   // type -> Array<key>  (sparse; index -> key)
+
+    for (const [type, def] of Object.entries(BLOCK_DEFS)) {
+      const t = +type;
+      const mat = new THREE.MeshLambertMaterial({
+        color: def.color,
+        transparent: !def.opaque,
+        opacity: def.opaque ? 1.0 : 0.72,
+      });
+      const mesh = new THREE.InstancedMesh(this.geometry, mat, CONFIG.MAX_BLOCKS);
+      mesh.castShadow    = def.opaque;
+      mesh.receiveShadow = def.opaque;
+      mesh.count = 0;
+      mesh.userData.blockType = t;
+      // InstancedMesh's default bounding sphere is computed from the geometry
+      // only (a single 1x1x1 box), which is wrong for our spread-out instances.
+      // Disable culling — only 5 meshes, cost is negligible.
+      mesh.frustumCulled = false;
+      // Identity matrix pre-fill (some drivers need valid matrix at slot 0)
+      const m = new THREE.Matrix4();
+      for (let i = 0; i < CONFIG.MAX_BLOCKS; i++) mesh.setMatrixAt(i, m);
+      this.scene.add(mesh);
+      this.meshes[t] = mesh;
+      this.counts[t] = 0;
+      this.k2i[t]    = new Map();
+      this.i2k[t]    = new Array(CONFIG.MAX_BLOCKS);
+    }
+  }
+
+  key(x, y, z) { return x + ',' + y + ',' + z; }
+  inBounds(x, y, z) {
+    return y >= 0 && y < CONFIG.MAX_HEIGHT &&
+           x >= -this.halfWorld && x < this.halfWorld &&
+           z >= -this.halfWorld && z < this.halfWorld;
+  }
+
+  has(x, y, z) { return this.blocks.has(this.key(x, y, z)); }
+  get(x, y, z) { return this.blocks.get(this.key(x, y, z)) || BLOCK.AIR; }
+
+  /**
+   * Add a block at integer coords. No-op if out of bounds, already filled, or full.
+   * @returns {boolean} true if added
+   */
+  add(x, y, z, type) {
+    if (type === BLOCK.AIR) return false;
+    if (!this.inBounds(x, y, z)) return false;
+    const k = this.key(x, y, z);
+    if (this.blocks.has(k)) return false;
+    const count = this.counts[type];
+    if (count >= CONFIG.MAX_BLOCKS) return false;
+
+    this.blocks.set(k, type);
+    this.k2i[type].set(k, count);
+    this.i2k[type][count] = k;
+
+    const m = _matrix;
+    m.makeTranslation(x, y, z);
+    const mesh = this.meshes[type];
+    mesh.setMatrixAt(count, m);
+    mesh.count = count + 1;
+    mesh.instanceMatrix.needsUpdate = true;
+
+    this.counts[type] = count + 1;
+    return true;
+  }
+
+  /**
+   * Remove a block at integer coords. Swap-with-last keeps the active
+   * instance range contiguous. No-op if absent.
+   * @returns {boolean} true if removed
+   */
+  remove(x, y, z) {
+    const k = this.key(x, y, z);
+    const type = this.blocks.get(k);
+    if (type === undefined) return false;
+
+    const mesh     = this.meshes[type];
+    const k2i      = this.k2i[type];
+    const i2k      = this.i2k[type];
+    const id       = k2i.get(k);
+    const last     = this.counts[type] - 1;
+
+    if (id !== last) {
+      // copy last instance's matrix into the freed slot
+      const lastKey = i2k[last];
+      const m = _matrix;
+      mesh.getMatrixAt(last, m);
+      mesh.setMatrixAt(id, m);
+      k2i.set(lastKey, id);
+      i2k[id] = lastKey;
+    }
+    k2i.delete(k);
+    i2k[last] = undefined;
+
+    this.blocks.delete(k);
+    mesh.count = last;
+    mesh.instanceMatrix.needsUpdate = true;
+    this.counts[type] = last;
+    return true;
+  }
+
+  /** Total block count across all types. */
+  totalCount() {
+    let n = 0;
+    for (const t in this.counts) n += this.counts[t];
+    return n;
+  }
+
+  /** Lookup the world position of the block an instance represents. */
+  getInstancePosition(mesh, instanceId, target) {
+    const m = _matrix;
+    mesh.getMatrixAt(instanceId, m);
+    target.setFromMatrixPosition(m);
+    return target;
+  }
+}
+
+// Scratch matrix used inside World methods (avoids per-call allocation)
+const _matrix = new THREE.Matrix4();
+
+/* ===========================================================
+ *  Terrain Generator — fBm heightmap, place blocks per column
+ *  - Top: GRASS (if above water) or SAND (if at/near water)
+ *  - Sub-surface: DIRT (top ~3 layers) then STONE
+ *  - Below terrain up to WATER_LEVEL: WATER
+ * =========================================================== */
+class TerrainGenerator {
+  constructor(world, perlin) {
+    this.world  = world;
+    this.perlin = perlin;
+  }
+
+  generate() {
+    const { WORLD_SIZE, MAX_HEIGHT, BASE_HEIGHT, NOISE_SCALE, NOISE_OCTAVES,
+            NOISE_PERSIST, WATER_LEVEL } = CONFIG;
+    const half = worldBounds(WORLD_SIZE);
+
+    // Pass 1: compute heightmap
+    const heights = new Int16Array(WORLD_SIZE * WORLD_SIZE);
+    for (let x = -half; x < half; x++) {
+      for (let z = -half; z < half; z++) {
+        const n = this.perlin.fbm(x * NOISE_SCALE, 0, z * NOISE_SCALE,
+                                  NOISE_OCTAVES, NOISE_PERSIST);
+        // map [-1, 1] -> [BASE - AMP, BASE + AMP]
+        const h = Math.floor(BASE_HEIGHT + n * 9);
+        const clamped = Math.max(1, Math.min(MAX_HEIGHT - 2, h));
+        heights[(x + half) * WORLD_SIZE + (z + half)] = clamped;
+      }
+    }
+
+    // Pass 2: place blocks
+    for (let x = -half; x < half; x++) {
+      for (let z = -half; z < half; z++) {
+        const h = heights[(x + half) * WORLD_SIZE + (z + half)];
+        for (let y = 0; y <= h; y++) {
+          let type;
+          if (y === h) {
+            // surface
+            type = (h <= WATER_LEVEL + 1) ? BLOCK.SAND : BLOCK.GRASS;
+          } else if (y >= h - 3) {
+            type = BLOCK.DIRT;
+          } else {
+            type = BLOCK.STONE;
+          }
+          this.world.add(x, y, z, type);
+        }
+        // fill water in lakes
+        for (let y = h + 1; y <= WATER_LEVEL; y++) {
+          this.world.add(x, y, z, BLOCK.WATER);
+        }
+      }
+    }
+  }
+}
+
+function worldBounds(size) { return Math.floor(size / 2); }
+
+/* ===========================================================
+ *  Player — first-person controller with walk & fly modes
+ *  Uses Pointer Lock for mouse capture.
+ * =========================================================== */
+class Player {
+  constructor(camera, world, domElement) {
+    this.camera   = camera;
+    this.world    = world;
+    this.dom      = domElement;
+    this.position = new THREE.Vector3(0, CONFIG.BASE_HEIGHT + 2, 0);
+    this.velocity = new THREE.Vector3();
+    this.yaw      = 0;
+    this.pitch    = 0;
+    this.onGround = false;
+    this.flyMode  = false;
+
+    this.keys  = new Set();
+    this.locked = false;
+    this.reach = CONFIG.MAX_REACH;
+
+    camera.position.copy(this.position);
+    this._applyRotation();
+
+    this._bind();
+  }
+
+  _bind() {
+    document.addEventListener('keydown', e => {
+      this.keys.add(e.code);
+      if (e.code === 'KeyF') this._toggleFly();
+    });
+    document.addEventListener('keyup', e => this.keys.delete(e.code));
+
+    // Mouse-look: pointer lock (immersive) OR MMB drag (fallback).
+    // The MMB drag path works on every browser and on every URL scheme
+    // (including `file://`), so users without pointer lock can still
+    // look around.
+    this._cursorX = window.innerWidth / 2;
+    this._cursorY = window.innerHeight / 2;
+
+    const _crosshair = document.getElementById('crosshair');
+    const _updateCrosshair = (locked) => {
+      if (!_crosshair) return;
+      if (locked) {
+        _crosshair.style.left = '50%';
+        _crosshair.style.top  = '50%';
+      } else if (this._cursorX != null) {
+        _crosshair.style.left = this._cursorX + 'px';
+        _crosshair.style.top  = this._cursorY + 'px';
+      }
+    };
+    this._updateCrosshair = _updateCrosshair;
+    _updateCrosshair(false);
+
+    document.addEventListener('mousemove', e => {
+      this._cursorX = e.clientX;
+      this._cursorY = e.clientY;
+
+      if (this._lookDragging) {
+        const dx = e.clientX - this._lastLookX;
+        const dy = e.clientY - this._lastLookY;
+        this._lastLookX = e.clientX;
+        this._lastLookY = e.clientY;
+        this.yaw   -= dx * CONFIG.MOUSE_SENS;
+        this.pitch -= dy * CONFIG.MOUSE_SENS;
+        const lim = Math.PI / 2 - 0.01;
+        if (this.pitch >  lim) this.pitch =  lim;
+        if (this.pitch < -lim) this.pitch = -lim;
+        this._applyRotation();
+        _updateCrosshair(false); // keep crosshair under the (moving) cursor
+      } else if (this.locked) {
+        this.yaw   -= e.movementX * CONFIG.MOUSE_SENS;
+        this.pitch -= e.movementY * CONFIG.MOUSE_SENS;
+        const lim = Math.PI / 2 - 0.01;
+        if (this.pitch >  lim) this.pitch =  lim;
+        if (this.pitch < -lim) this.pitch = -lim;
+        this._applyRotation();
+      } else {
+        _updateCrosshair(false);
+      }
+    });
+    // Keep the crosshair pinned to the screen center whenever the
+    // pointer-lock state flips on.
+    document.addEventListener('pointerlockchange', () => {
+      this.locked = (document.pointerLockElement === this.dom);
+      _updateCrosshair(this.locked);
+    });
+  }
+
+  _applyRotation() {
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.y = this.yaw;
+    this.camera.rotation.x = this.pitch;
+  }
+
+  _toggleFly() {
+    this.flyMode = !this.flyMode;
+    this.velocity.set(0, 0, 0);
+    Game.ui.toast(this.flyMode ? '✈ Fly mode ON' : '🚶 Walk mode');
+    Game.ui.setMode(this.flyMode ? 'fly' : 'walk');
+  }
+
+  /** Spawn the player at a sensible height above the terrain. */
+  respawn() {
+    const half = worldBounds(CONFIG.WORLD_SIZE);
+    // pick highest solid block in a 5x5 area around origin
+    let bestY = CONFIG.BASE_HEIGHT;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const x = dx, z = dz;
+        // climb from top to find topmost solid
+        for (let y = CONFIG.MAX_HEIGHT - 1; y >= 0; y--) {
+          if (this.world.has(x, y, z) && this.world.get(x, y, z) !== BLOCK.WATER) {
+            if (y + 1 > bestY) bestY = y + 1;
+            break;
+          }
+        }
+      }
+    }
+    this.position.set(0, bestY + CONFIG.PLAYER_HEIGHT, 0);
+    this.velocity.set(0, 0, 0);
+    this.pitch = -0.3; // tilt the camera down so the crosshair lands on the terrain, not the sky
+    this.camera.position.copy(this.position);
+    this._applyRotation();
+  }
+
+  /** Step the simulation by `dt` seconds. */
+  update(dt) {
+    // local input basis
+    const fwd    = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0);
+    const strafe = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
+    const up     = (this.keys.has('Space') ? 1 : 0) - (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 1 : 0);
+
+    // forward / right vectors in world XZ-plane (ignore pitch)
+    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+    const forward = new THREE.Vector3(-sin, 0, -cos);
+    const right   = new THREE.Vector3( cos, 0, -sin);
+
+    const speed = this.flyMode ? CONFIG.FLY_SPEED : CONFIG.WALK_SPEED;
+    const move  = new THREE.Vector3()
+      .addScaledVector(forward,  fwd)
+      .addScaledVector(right,    strafe);
+
+    if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed * dt);
+
+    if (this.flyMode) {
+      this.velocity.x = move.x;
+      this.velocity.z = move.z;
+      this.velocity.y = up * FLY_VEL_MAG * dt;
+    } else {
+      this.velocity.x = move.x;
+      this.velocity.z = move.z;
+      // gravity
+      this.velocity.y += CONFIG.GRAVITY * dt;
+      if (this.keys.has('Space') && this.onGround) {
+        this.velocity.y = CONFIG.JUMP_VELOCITY;
+      }
+    }
+
+    // Integrate & collide on each axis
+    this._moveAxis('x', this.velocity.x);
+    this._moveAxis('y', this.velocity.y);
+    this._moveAxis('z', this.velocity.z);
+
+    this.camera.position.copy(this.position);
+  }
+
+  _moveAxis(axis, delta) {
+    if (delta === 0) return;
+    const p = this.position;
+    const r = CONFIG.PLAYER_RADIUS;
+    const h = CONFIG.PLAYER_HEIGHT;
+    const old = p[axis];
+    p[axis] = old + delta;
+
+    // World bounds clamp
+    const lim = worldBounds(CONFIG.WORLD_SIZE) - r - 0.01;
+    if (axis === 'x' || axis === 'z') {
+      if (p[axis] >  lim) p[axis] =  lim;
+      if (p[axis] < -lim) p[axis] = -lim;
+    }
+
+    if (this._collidesAt(p, r, h, axis)) {
+      p[axis] = old;
+      if (axis === 'y') {
+        if (delta < 0) this.onGround = true;
+        this.velocity.y = 0;
+      } else {
+        this.velocity[axis] = 0;
+      }
+    } else if (axis === 'y' && delta < 0) {
+      this.onGround = false;
+    } else if (axis === 'y' && delta > 0) {
+      this.onGround = false;
+    }
+  }
+
+  /** True if the player's AABB intersects any solid block. */
+  _collidesAt(p, r, h, axis) {
+    if (this.flyMode) return false;
+    const minX = Math.floor(p.x - r);
+    const maxX = Math.floor(p.x + r);
+    const minY = Math.floor(p.y - h);
+    const maxY = Math.floor(p.y - 0.1);
+    const minZ = Math.floor(p.z - r);
+    const maxZ = Math.floor(p.z + r);
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          if (y < 0) continue;
+          const t = this.world.get(x, y, z);
+          if (t === BLOCK.AIR || t === BLOCK.WATER) continue;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+const FLY_VEL_MAG = 12; // blocks/sec vertical in fly mode
+
+/* ===========================================================
+ *  Picker — Raycaster vs all per-type InstancedMeshes
+ *  Returns the world-space hit position + the world-space
+ *  face normal so we can place adjacent blocks.
+ * =========================================================== */
+class Picker {
+  constructor(camera, world) {
+    this.camera   = camera;
+    this.world    = world;
+    this.raycaster = new THREE.Raycaster();
+    this.raycaster.far = CONFIG.MAX_REACH;
+    this.center   = new THREE.Vector2(0, 0); // center of screen (crosshair)
+    this._pos     = new THREE.Vector3();
+    this._normal  = new THREE.Vector3();
+  }
+
+  /**
+   * Returns { pos, normal, type, instanceId } or null.
+   * @param {THREE.Vector2} [ndc] - Normalized device coords ([-1,1]²) of
+   *   the aim point. Defaults to the screen center (crosshair), which is
+   *   the right choice when the pointer is locked.
+   */
+  pick(ndc) {
+    this.camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(ndc || this.center, this.camera);
+    const meshes = Object.values(this.world.meshes);
+    const hits   = this.raycaster.intersectObjects(meshes, false);
+    if (hits.length === 0) return null;
+    // closest hit
+    const hit = hits[0];
+
+    this.world.getInstancePosition(hit.object, hit.instanceId, this._pos);
+
+    // face normal in world space
+    this._normal.copy(hit.face.normal);
+    this._normal.transformDirection(hit.object.matrixWorld);
+
+    return {
+      pos:        this._pos,
+      normal:     this._normal,
+      type:       hit.object.userData.blockType,
+      instanceId: hit.instanceId,
+      distance:   hit.distance,
+    };
+  }
+}
+
+/* ===========================================================
+ *  HUD — DOM-based, not in the WebGL scene
+ * =========================================================== */
+class HUD {
+  constructor() {
+    this.root       = document.getElementById('hud');
+    this.crosshair  = document.getElementById('crosshair');
+    this.hotbar     = document.getElementById('hotbar');
+    this.statX      = document.getElementById('stat-x');
+    this.statY      = document.getElementById('stat-y');
+    this.statZ      = document.getElementById('stat-z');
+    this.statFps    = document.getElementById('stat-fps');
+    this.statBlocks = document.getElementById('stat-blocks');
+    this.modeEl     = document.getElementById('mode');
+    this.toastEl    = document.getElementById('toast');
+    this.startScr   = document.getElementById('start-screen');
+    this.pauseScr   = document.getElementById('pause');
+    this.startBtn   = document.getElementById('start-btn');
+
+    this.slots      = [];
+    this.activeIdx  = 0;
+    this._buildHotbar();
+
+    this._toastTimer = 0;
+  }
+
+  _buildHotbar() {
+    PLACEABLE.forEach((type, i) => {
+      const def = BLOCK_DEFS[type];
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.innerHTML = `
+        <span class="key">${i + 1}</span>
+        <div class="swatch" style="background:#${def.color.toString(16).padStart(6, '0')}"></div>
+        <span class="name">${def.name}</span>
+      `;
+      this.hotbar.appendChild(slot);
+      this.slots.push({ slot, type });
+    });
+    this._updateActive();
+  }
+
+  selectSlot(i) {
+    if (i < 0 || i >= PLACEABLE.length) return;
+    this.activeIdx = i;
+    this._updateActive();
+  }
+
+  _updateActive() {
+    this.slots.forEach((s, i) => {
+      s.slot.classList.toggle('active', i === this.activeIdx);
+    });
+  }
+
+  currentType() { return PLACEABLE[this.activeIdx]; }
+
+  cycleBlock(dir) {
+    this.activeIdx = (this.activeIdx + dir + PLACEABLE.length) % PLACEABLE.length;
+    this._updateActive();
+  }
+
+  setMode(mode) {
+    this.modeEl.className = mode;
+    this.modeEl.textContent = mode === 'fly' ? 'FLY' : 'WALK';
+  }
+
+  setPos(x, y, z) {
+    this.statX.textContent = x.toFixed(1);
+    this.statY.textContent = y.toFixed(1);
+    this.statZ.textContent = z.toFixed(1);
+  }
+
+  setFps(fps) { this.statFps.textContent = String(Math.round(fps)); }
+  setBlocks(n) { this.statBlocks.textContent = String(n); }
+
+  setHit(active) { this.crosshair.classList.toggle('hit', !!active); }
+
+  toast(msg, ms = 1500) {
+    this.toastEl.textContent = msg;
+    this.toastEl.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this.toastEl.classList.remove('show'), ms);
+  }
+
+  show()  { this.root.classList.remove('hidden'); }
+  hide()  { this.root.classList.add('hidden'); }
+  hideStart() { this.startScr.classList.add('hidden'); }
+  showStart() { this.startScr.classList.remove('hidden'); }
+  showPause() { this.pauseScr.classList.add('show'); }
+  hidePause() { this.pauseScr.classList.remove('show'); }
+}
+
+/* ===========================================================
+ *  Game — orchestrator
+ * =========================================================== */
+class Game {
+  constructor() {
+    this.canvas  = document.getElementById('scene');
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setClearColor(0x87ceeb);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+
+    this.scene  = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x87ceeb);
+    this.scene.fog        = new THREE.Fog(0x87ceeb, CONFIG.FOG_NEAR, CONFIG.FOG_FAR);
+
+    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 600);
+    this.camera.position.set(0, CONFIG.BASE_HEIGHT + 5, 0);
+
+    this._setupLights();
+    this._setupGroundGuide();
+
+    this.ui     = new HUD();
+    this.perlin = new PerlinNoise(CONFIG.SEED);
+    this.world  = new VoxelWorld(this.scene, this._blockGeometry());
+    new TerrainGenerator(this.world, this.perlin).generate();
+
+    this.player = new Player(this.camera, this.world, this.canvas);
+    this.player.respawn();
+    this.picker = new Picker(this.camera, this.world);
+
+    this._fpsSamples = [];
+    this._lastTime   = performance.now();
+    this._frameId    = null;
+    this._running    = false;
+
+    this._bindEvents();
+    Game.ui = this.ui; // expose for Player toast/setMode
+  }
+
+  _blockGeometry() {
+    // Subtle bevel would cost more; a plain box is fine and matches the brief.
+    return new THREE.BoxGeometry(1, 1, 1);
+  }
+
+  _setupLights() {
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    this.scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xfff4e0, 0.95);
+    sun.position.set(60, 100, 40);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left   = -80;
+    sun.shadow.camera.right  =  80;
+    sun.shadow.camera.top    =  80;
+    sun.shadow.camera.bottom = -80;
+    sun.shadow.camera.near   = 0.5;
+    sun.shadow.camera.far    = 250;
+    sun.shadow.bias = -0.0008;
+    this.scene.add(sun);
+    this.scene.add(sun.target);
+
+    // Soft fill from opposite side
+    const fill = new THREE.DirectionalLight(0x9fc6ff, 0.25);
+    fill.position.set(-40, 60, -50);
+    this.scene.add(fill);
+  }
+
+  _setupGroundGuide() {
+    // No-op placeholder (kept for parity with the README roadmap).
+    // The visible ground is built entirely from voxel blocks above.
+  }
+
+  _bindEvents() {
+    window.addEventListener('resize', () => this._onResize());
+
+    this.ui.startBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      this._requestLock();
+    });
+    this.ui.startScr.addEventListener('click', () => this._requestLock());
+    this.ui.pauseScr.addEventListener('click', () => this._requestLock());
+
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Escape') {
+        if (document.pointerLockElement) document.exitPointerLock();
+        return;
+      }
+      if (e.code.startsWith('Digit') || e.code.startsWith('Numpad')) {
+        const n = parseInt(e.code.replace(/\D/g, ''), 10);
+        if (!isNaN(n)) this.ui.selectSlot(n - 1);
+      } else if (e.code === 'KeyR') {
+        this.player.respawn();
+        this.ui.toast('Respawned');
+      } else if (e.code === 'KeyH') {
+        document.getElementById('help').classList.toggle('hidden');
+      } else if (e.code === 'KeyQ') {
+        this.ui.cycleBlock(-1);
+      } else if (e.code === 'KeyE') {
+        this.ui.cycleBlock(+1);
+      }
+    });
+
+    // Block interaction. Clicks fire regardless of pointer-lock state —
+    // if lock failed (file://, locked-down context, etc.) the cursor
+    // is visible and we raycast through the cursor NDC instead of the
+    // screen center.
+    document.addEventListener('mousedown', e => {
+      console.log('[voxel] mousedown', { button: e.button, target: e.target && e.target.id, locked: this.player.locked, running: this._running });
+      if (e.button === 2) e.preventDefault();
+
+      // Hotbar slot click — select that block, don't break/place.
+      const slot = e.target.closest && e.target.closest('.slot');
+      if (slot && this.ui.slots) {
+        const idx = this.ui.slots.findIndex(s => s.slot === slot);
+        if (idx >= 0) {
+          this.ui.selectSlot(idx);
+          return;
+        }
+      }
+
+      if (e.button === 1) {
+        this.player._lookDragging = true;
+        this.player._lastLookX = e.clientX;
+        this.player._lastLookY = e.clientY;
+        e.preventDefault();
+        return;
+      }
+
+      if (this._running && !this.player.locked) {
+        this._requestLock();
+      }
+
+      if (e.button === 0 || e.button === 2) {
+        const ndc = this.player.locked
+          ? null
+          : new THREE.Vector2(
+              (e.clientX / window.innerWidth)  *  2 - 1,
+              (e.clientY / window.innerHeight) * -2 + 1
+            );
+        this._handleBlockClick(e.button, ndc);
+      }
+    });
+
+    document.addEventListener('mouseup', e => {
+      if (e.button === 1) this.player._lookDragging = false;
+    });
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Scroll wheel = cycle blocks (works whether or not pointer is locked).
+    document.addEventListener('wheel', e => {
+      if (!this._running) return;
+      this.ui.cycleBlock(e.deltaY > 0 ? +1 : -1);
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('pointerlockerror', () => {
+      if (this.ui && this.ui.toast) {
+        this.ui.toast('마우스 잠금 실패 — MMB 드래그로 시점을 회전하세요', 3000);
+      }
+    });
+  }
+
+  _requestLock() {
+    // Wrap to keep headless / locked-down contexts from throwing.
+    try {
+      this.canvas.requestPointerLock();
+    } catch (e) {
+      console.warn('Pointer lock unavailable in this context:', e && e.message);
+    }
+    if (this._running) return;
+    // first-time start
+    this.ui.hideStart();
+    this.ui.show();
+    this._running = true;
+    this._lastTime = performance.now();
+    this._loop();
+  }
+
+  _onResize() {
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+  }
+
+  _isInsidePlayer(p) {
+    const r = CONFIG.PLAYER_RADIUS;
+    const h = CONFIG.PLAYER_HEIGHT;
+    return p.x + 1 > this.player.position.x - r &&
+           p.x     < this.player.position.x + r &&
+           p.y + 1 > this.player.position.y - h &&
+           p.y     < this.player.position.y &&
+           p.z + 1 > this.player.position.z - r &&
+           p.z     < this.player.position.z + r;
+  }
+
+  /**
+   * Resolve a block click.
+   * @param {number} button 0 = left (mine), 2 = right (place)
+   * @param {THREE.Vector2} [ndc] Aim point in normalized device coords.
+   *   Omit to use the screen center (crosshair).
+   * @returns {object|null} info about the action that was performed
+   */
+  _handleBlockClick(button, ndc) {
+    const hit = this.picker.pick(ndc);
+    if (!hit) {
+      this.ui.toast('No block under aim', 700);
+      return null;
+    }
+    if (button === 0) {
+      const removed = this.world.remove(hit.pos.x, hit.pos.y, hit.pos.z);
+      if (removed) {
+        this._flash('remove');
+        this.ui.toast(`Mined ${BLOCK_DEFS[hit.type].name}`, 700);
+      }
+      return removed ? { action: 'remove', pos: hit.pos.clone(), type: hit.type } : null;
+    } else if (button === 2) {
+      const np = hit.pos.clone().add(hit.normal).floor();
+      if (this._isInsidePlayer(np)) {
+        this.ui.toast("Can't place inside yourself", 900);
+        return { action: 'place-blocked-by-player' };
+      }
+      const added = this.world.add(np.x, np.y, np.z, this.ui.currentType());
+      if (added) {
+        this._flash('place');
+        this.ui.toast(`Placed ${BLOCK_DEFS[this.ui.currentType()].name}`, 700);
+      }
+      return added ? { action: 'place', pos: np.clone(), type: this.ui.currentType() } : null;
+    }
+    return null;
+  }
+
+  _flash(kind) {
+    const el = document.getElementById('flash');
+    if (!el) return;
+    el.classList.remove('show-remove', 'show-place');
+    el.classList.add(kind === 'place' ? 'show-place' : 'show-remove');
+    clearTimeout(this._flashTimer);
+    this._flashTimer = setTimeout(() => el.classList.remove('show-remove', 'show-place'), 120);
+  }
+
+  _loop() {
+    this._frameId = requestAnimationFrame(() => this._loop());
+    const now = performance.now();
+    const dt  = Math.min(0.05, (now - this._lastTime) / 1000); // cap dt to avoid huge steps
+    this._lastTime = now;
+
+    this.player.update(dt);
+
+    // Highlight the targeted block at the current aim point. When the
+    // pointer is locked we use the crosshair (screen center); otherwise
+    // we follow the cursor so the highlight matches what a click would hit.
+    const aimNDC = this.player.locked
+      ? null
+      : new THREE.Vector2(
+          (this.player._cursorX / window.innerWidth)  *  2 - 1,
+          (this.player._cursorY / window.innerHeight) * -2 + 1
+        );
+    const hit = this.picker.pick(aimNDC);
+    this.ui.setHit(!!hit);
+
+    // HUD updates (throttled)
+    this._hudAccum = (this._hudAccum || 0) + dt;
+    if (this._hudAccum > 0.1) {
+      this._hudAccum = 0;
+      const p = this.player.position;
+      this.ui.setPos(p.x, p.y, p.z);
+      this.ui.setBlocks(this.world.totalCount());
+    }
+    // FPS
+    this._fpsSamples.push(dt);
+    if (this._fpsSamples.length > 30) this._fpsSamples.shift();
+    if (this._fpsSamples.length >= 10) {
+      const avg = this._fpsSamples.reduce((a, b) => a + b, 0) / this._fpsSamples.length;
+      this.ui.setFps(1 / avg);
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  destroy() {
+    if (this._frameId) cancelAnimationFrame(this._frameId);
+    this.renderer.dispose();
+  }
+}
+
+// Boot once the DOM is ready
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    const game = new Game();
+    // Expose a debug handle for QA tooling. The game itself does not depend on
+    // this; setting/removing it has no effect on the running simulation.
+    window.__game = game;
+  } catch (err) {
+    console.error('Voxel Sandbox failed to start:', err);
+    document.body.innerHTML = `<pre style="color:#fff;padding:20px;font-family:monospace">${err.stack || err}</pre>`;
+  }
+});
+</script>
+
 </body>
 </html>
