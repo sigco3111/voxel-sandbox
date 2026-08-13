@@ -10,11 +10,11 @@
 
 ## 🎬 라이브 데모 (Live Demo)
 
-> **👉 [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/)** — 브라우저에서 바로 실행 (60fps, WebGL)
+> **👉 [https://sigco3111.github.io/voxel-sandbox/](https://sigco3111.github.io/voxel-sandbox/)** — 브라우저에서 바로 실행 (60fps, WebGL)
 
 | | |
 |---|---|
-| ![Demo](https://img.shields.io/badge/Live-Demo-7C3AED?style=for-the-badge&logo=vercel&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fvoxel--sandbox-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/voxel-sandbox) |
+| ![Demo](https://img.shields.io/badge/Live-Demo-222222?style=for-the-badge&logo=githubpages&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fvoxel--sandbox-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/voxel-sandbox) |
 | ![Status](https://img.shields.io/badge/Status-Live-22C55E?style=flat-square) | ![Stack](https://img.shields.io/badge/Stack-Three.js%20%2B%20InstancedMesh-000000?style=flat-square&logo=three.js&logoColor=white) |
 | ![License](https://img.shields.io/badge/License-MIT-F1C40F?style=flat-square) | ![Deps](https://img.shields.io/badge/Dependencies-0-9CA3AF?style=flat-square) |
 
@@ -37,7 +37,7 @@
 | **모델** | MiniMax-M3 |
 | **실행 환경** | OpenCode CLI |
 | **저장소** | [`sigco3111/voxel-sandbox`](https://github.com/sigco3111/voxel-sandbox) |
-| **라이브** | [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/) |
+| **라이브** | [https://sigco3111.github.io/voxel-sandbox/](https://sigco3111.github.io/voxel-sandbox/) |
 | **라이선스** | MIT |
 | **의존성** | 없음 (Three.js CDN, 단일 HTML) |
 
@@ -199,7 +199,7 @@ canvas.addEventListener('mousedown', (e) => {
 ## 🚀 실행 방법 (Quick Start)
 
 ### 방법 1: 라이브 데모 (가장 간단)
-위 [🎬 라이브 데모](https://voxel-sandbox-five.vercel.app/) 링크 클릭 → 즉시 실행
+위 [🎬 라이브 데모](https://sigco3111.github.io/voxel-sandbox/) 링크 클릭 → 즉시 실행
 
 ### 방법 2: 그냥 브라우저로 열기
 ```bash

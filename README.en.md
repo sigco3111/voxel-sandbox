@@ -10,11 +10,11 @@ A **Minecraft-like 3D voxel world** in the browser, with terrain **auto-generate
 
 ## 🎬 Live Demo
 
-> **👉 [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/)** — Open in browser (60fps, WebGL)
+> **👉 [https://sigco3111.github.io/voxel-sandbox/](https://sigco3111.github.io/voxel-sandbox/)** — Open in browser (60fps, WebGL)
 
 | | |
 |---|---|
-| ![Demo](https://img.shields.io/badge/Live-Demo-7C3AED?style=for-the-badge&logo=vercel&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fvoxel--sandbox-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/voxel-sandbox) |
+| ![Demo](https://img.shields.io/badge/Live-Demo-222222?style=for-the-badge&logo=githubpages&logoColor=white) | [![Repo](https://img.shields.io/badge/GitHub-sigco3111%2Fvoxel--sandbox-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sigco3111/voxel-sandbox) |
 | ![Status](https://img.shields.io/badge/Status-Live-22C55E?style=flat-square) | ![Stack](https://img.shields.io/badge/Stack-Three.js%20%2B%20InstancedMesh-000000?style=flat-square&logo=three.js&logoColor=white) |
 | ![License](https://img.shields.io/badge/License-MIT-F1C40F?style=flat-square) | ![Deps](https://img.shields.io/badge/Dependencies-0-9CA3AF?style=flat-square) |
 
@@ -37,7 +37,7 @@ This project's code is **automatically generated** using the model and prompt be
 | **Model** | MiniMax-M3 |
 | **Runtime** | OpenCode CLI |
 | **Repository** | [`sigco3111/voxel-sandbox`](https://github.com/sigco3111/voxel-sandbox) |
-| **Live** | [https://voxel-sandbox-five.vercel.app/](https://voxel-sandbox-five.vercel.app/) |
+| **Live** | [https://sigco3111.github.io/voxel-sandbox/](https://sigco3111.github.io/voxel-sandbox/) |
 | **License** | MIT |
 | **Dependencies** | None (Three.js CDN, single HTML file) |
 
@@ -199,7 +199,7 @@ canvas.addEventListener('mousedown', (e) => {
 ## 🚀 Quick Start
 
 ### Method 1: Live demo (easiest)
-Click the [🎬 Live Demo](https://voxel-sandbox-five.vercel.app/) link above.
+Click the [🎬 Live Demo](https://sigco3111.github.io/voxel-sandbox/) link above.
 
 ### Method 2: Just open in browser
 ```bash
